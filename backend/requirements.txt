@@ -1,0 +1,21 @@
+fastapi==0.115.13
+uvicorn==0.34.0
+sqlalchemy==2.0.41
+pymysql==1.1.1
+pydantic-settings==2.7.1
+bcrypt==4.2.1
+# 仅使用 HS256(HMAC),无需 cryptography 原生后端;且 x86_64 Python 环境下编译 cryptography 易失败
+# 若将来需要 RS/ES 等非对称算法,改用 conda install cryptography 安装预编译包
+python-jose==3.3.0
+python-multipart==0.0.32
+apscheduler==3.10.4
+
+openai==2.26.0
+anthropic==0.84.0
+langchain-openai==1.1.11
+
+langgraph==1.1.2
+langgraph-prebuilt==1.0.8
+langgraph-checkpoint==4.0.1
+langgraph-checkpoint-postgres==3.0.5
+langgraph-sdk==0.3.9
