@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -32,6 +34,11 @@ class Settings(BaseSettings):
     BASE_URL: str = "https://ws-89tbx7taehfjlkhj.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
     LLM_MODEL: str = "qwen3.7-flash"
     EMBED_MODEL: str = "text-embedding-v4"
+
+    # LangGraph 会话持久化(PostgreSQL checkpointer)
+    POSTGRES_URL: str = ""
+
+    BASE_DIR:Path =  Path(__file__).parent.parent.parent
 
     @property
     def database_url(self) -> str:

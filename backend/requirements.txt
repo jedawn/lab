@@ -2,7 +2,7 @@ fastapi==0.115.13
 uvicorn==0.34.0
 sqlalchemy==2.0.41
 pymysql==1.1.1
-pydantic-settings==2.7.1
+pydantic-settings==2.10.1
 bcrypt==4.2.1
 # 仅使用 HS256(HMAC),无需 cryptography 原生后端;且 x86_64 Python 环境下编译 cryptography 易失败
 # 若将来需要 RS/ES 等非对称算法,改用 conda install cryptography 安装预编译包
@@ -12,10 +12,19 @@ apscheduler==3.10.4
 
 openai==2.26.0
 anthropic==0.84.0
+langchain==1.4.3
 langchain-openai==1.1.11
+langchain_community==0.4.1
+langchain_chroma==1.1.0
 
-langgraph==1.1.2
-langgraph-prebuilt==1.0.8
-langgraph-checkpoint==4.0.1
+langgraph==1.2.12
+langgraph-prebuilt==1.1.0
+langgraph-checkpoint==4.2.0
 langgraph-checkpoint-postgres==3.0.5
-langgraph-sdk==0.3.9
+langgraph-sdk==0.4.5
+# langgraph-checkpoint-postgres 依赖 psycopg,需二进制 libpq 包装器(否则报 no pq wrapper available)
+psycopg[binary]==3.3.6
+
+
+chromadb==1.5.9
+dashscope==1.25.13

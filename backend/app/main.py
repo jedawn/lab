@@ -52,7 +52,7 @@ def init_db():
     db = SessionLocal()
     try:
         if not db.query(User).filter(User.username == "admin").first():
-            db.add(User(username="admin", password=hash_password("123456"), name="管理员"))
+            db.add(User(username="admin", password=hash_password("123456"), name="管理员", role="admin"))
             db.commit()
 
         if not db.query(Lab).first():
