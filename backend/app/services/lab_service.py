@@ -6,11 +6,13 @@ from app.models import Device, Lab
 from app.schemas import LabCreateRequest, LabListItem, LabUpdateRequest
 
 
-def list_labs(db: Session, keyword: str, page: int, page_size: int) -> dict:
-    """实验室列表(分页+按名称搜索)。"""
+def list_labs(db: Session, keyword: str, page: int, page_size: int, status: int | None = None) -> dict:
+    """实验室列表(分页+按名称搜索+状态筛选)。"""
     query = db.query(Lab)
     if keyword.strip():
         query = query.filter(Lab.name.like(f"%{keyword.strip()}%"))
+    if status is not None:
+        query = query.filter(Lab.status == status)
     total = query.count()
     rows = (
         query.order_by(Lab.id.desc())

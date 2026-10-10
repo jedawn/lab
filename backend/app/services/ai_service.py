@@ -1,12 +1,18 @@
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import StateGraph, START, END, MessagesState
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
+
 from app.core.config import settings
 from langchain_openai import ChatOpenAI
 from app.services.kb_service import query_kb
+from app.services.lab_service import list_labs
+from langchain_core.tools import tool
+from rich import print as rprint
+from typing import  Literal
+from app.core.database import SessionLocal
 
 SYSTEM_PROMPT = """
 你是实验室知识库智能助手。
@@ -17,6 +23,7 @@ SYSTEM_PROMPT = """
 4. 只回答实验室相关业务问题。
 以下是参考资料:
 """
+
 
 class OverAllState(MessagesState):
     output: str
@@ -60,25 +67,68 @@ async def get_checkpointer():
 # 延迟初始化:不在模块导入时创建,避免配置缺失时整个应用无法启动
 _graph = None
 
+@tool
+def list_open_labs (keyword: str = "" ) -> str : 
+    """查询当前开放中的实验室列表，可以按名称关键词筛选
+    Args:
+        keyword: 实验室名称关键词，为空时查询全部
+    """
+    db = SessionLocal()
+    try :
+        result = list_labs(db, keyword=keyword, page=1, page_size=50, status=1)
+        labs = result[ "list" ] 
+        if not labs: 
+            return "没有找到符合条件的实验室" 
+        lines = [ f" {i + 1 } . {lab[ 'name' ]} " for i, lab in enumerate (labs)] 
+        return "已开启的实验室有:\n" + "\n" .join(lines) 
+    finally :
+        db.close()
 
+
+tools = [list_open_labs]
 async def get_graph():
     global _graph
     if _graph is None:
         llm = get_client()
-
+        llm_with_tools = llm.bind_tools(tools)
         async def llm_node(state: OverAllState) -> dict:
-            messages = [SystemMessage(content=SYSTEM_PROMPT)] + state["messages"]
-            response = await llm.ainvoke(messages)
+            question = state[ "messages" ][- 1 ].content
+            context_text = f"\n {query_kb(question)} \n"
+            messages = [SystemMessage(content=f"{SYSTEM_PROMPT}{context_text}")] + state["messages"]
+            response = await llm_with_tools.ainvoke(messages)
+            rprint(response)
             return {"messages": [response]}
 
+        def tool_node(state: OverAllState) -> dict:
+            tools_by_name = {"list_open_labs": list_open_labs}
+            last_msg = state["messages"][-1]
+            for tool_call in last_msg.tool_calls:
+                tool = tools_by_name[tool_call["name"]]
+                tool_res = tool.invoke(tool_call["args"])
+                tool_msg = ToolMessage(
+                    name=tool_call["name"],
+                    content=tool_res,
+                    tool_call_id=tool_call["id"]
+                )
+                return {
+                    "messages": tool_msg
+                }
         def output_node(state: OverAllState) -> dict:
             return {"output": state["messages"][-1].content}
 
+        def router(state: MessagesState) -> Literal[END, "tool_node"]:
+            if state["messages"][-1].tool_calls:
+                return "tool_node"
+            else:
+                return END
+
         builder = StateGraph(OverAllState)
         builder.add_node("llm_node", llm_node)
+        builder.add_node("tool_node", tool_node)
         builder.add_node("output_node", output_node)
         builder.add_edge(START, "llm_node")
-        builder.add_edge("llm_node", "output_node")
+        builder.add_conditional_edges("llm_node", router, path_map=["tool_node", END])
+        builder.add_edge("tool_node", "output_node")
         builder.add_edge("output_node", END)
         _graph = builder.compile(checkpointer=await get_checkpointer())
     return _graph
@@ -87,8 +137,6 @@ async def get_graph():
 async def chat(msg: str, thread_id: str) -> str:
     """非流式对话:返回完整回复"""
     graph = await get_graph()
-    global SYSTEM_PROMPT
-    SYSTEM_PROMPT = f"{SYSTEM_PROMPT}{query_kb(msg)}"
     config = {"configurable": {"thread_id": thread_id}}
     state = await graph.ainvoke({"messages": [HumanMessage(content=msg)]}, config=config)
     return state["output"]
@@ -96,8 +144,6 @@ async def chat(msg: str, thread_id: str) -> str:
 
 async def chat_stream(msg: str, thread_id: str):
     """流式对话:逐 token 生成回复"""
-    global SYSTEM_PROMPT
-    SYSTEM_PROMPT = f"{SYSTEM_PROMPT}{query_kb(msg)}"
     graph = await get_graph()
     config = {"configurable": {"thread_id": thread_id}}
     async for chunk, _meta in graph.astream(
